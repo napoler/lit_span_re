@@ -160,6 +160,8 @@ class myModel(pl.LightningModule):
         #     print(it.size())
         # print(torch.split(re_spo, 1, dim=-1))
 
+
+        # 拆分数据，做逐个实体对分类，关系对分类
         s, e, labels = torch.split(re_spo, 1, dim=-1)[0], torch.split(re_spo, 1, dim=-1)[2], \
                        torch.split(re_spo, 1, dim=-1)[1]
         # print(s.size(), e.size(), labels.size())
