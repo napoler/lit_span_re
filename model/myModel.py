@@ -125,7 +125,7 @@ class myModel(pl.LightningModule):
         # self.w=loss_alpha
         self.save_hyperparameters()
 
-    def forward(self, input_ids, token_type_ids=None, attention_mask=None):
+    def forward(self, input_ids, token_type_ids=None, attention_mask=None, re_spo=None):
         #         loss_fc=nn.CrossEntropyLoss(ignore_index=0)
 
         B, L = input_ids.size()
@@ -139,6 +139,12 @@ class myModel(pl.LightningModule):
             x_last_hidden_state, _ = self.rnn(x_last_hidden_state)
             x_last_hidden_state = self.fix(x_last_hidden_state)
 
+        # re_spo
+        # for it in torch.split(re_spo, 1, dim=-1):
+        #     print(it)
+        # print(torch.split(re_spo, 1, dim=-1))
+        for s,e in zip(torch.split(re_spo, 1, dim=-1)[0],torch.split(re_spo, 1, dim=-1)[2] ):
+            print(s,e)
         out_pos = self.pos_optimization(x_last_hidden_state)
         # 计算类型
 
@@ -201,11 +207,13 @@ class myModel(pl.LightningModule):
             # 自动调整
             if loss_type > loss_pos:
 
-                loss = loss_type * self.hparams.loss_alpha + loss_lm * (1 - self.hparams.loss_alpha) *1/ 100 + loss_pos * (
-                        1 - self.hparams.loss_alpha) *99/ 100
+                loss = loss_type * self.hparams.loss_alpha + loss_lm * (
+                            1 - self.hparams.loss_alpha) * 1 / 100 + loss_pos * (
+                               1 - self.hparams.loss_alpha) * 99 / 100
             else:
-                loss = loss_pos * self.hparams.loss_alpha + loss_lm * (1 - self.hparams.loss_alpha)*1 / 100 + loss_type * (
-                        1 - self.hparams.loss_alpha) *99/ 100
+                loss = loss_pos * self.hparams.loss_alpha + loss_lm * (
+                            1 - self.hparams.loss_alpha) * 1 / 100 + loss_type * (
+                               1 - self.hparams.loss_alpha) * 99 / 100
             # loss = loss_type + loss_lm + loss_pos
         else:
 
@@ -228,7 +236,7 @@ class myModel(pl.LightningModule):
         # It is independent of forward
 
         # print(len(batch))
-        input_ids, token_type_ids, attention_mask, tag, tagtype = batch
+        input_ids, token_type_ids, attention_mask, tag, tagtype, re_spo = batch
 
         # # 修改序列长度
         # input_ids, token_type_ids, attention_mask, tag, tagtype = input_ids.view(-1,
@@ -237,7 +245,7 @@ class myModel(pl.LightningModule):
         #                                                                                        self.hparams.max_len), tagtype.view(
         #     -1, self.hparams.max_len)
 
-        # spanmask引入噪点
+        # # spanmask引入噪点
         args = SimpleNamespace(mask_ratio=0.15)
         #         input_ids,labels=self.tomask(input_ids)
         mk = BertRandomMaskingScheme(args, self.tokenizer.vocab_size, -100,
@@ -245,7 +253,7 @@ class myModel(pl.LightningModule):
         input_ids, labels, _ = mk.mask(input_ids.cpu())
         input_ids = torch.Tensor(input_ids).to(self.device).long()
         labels = torch.Tensor(labels).to(self.device).long()
-        logits, outType, out_lm = self(input_ids, token_type_ids, attention_mask)
+        logits, outType, out_lm = self(input_ids, token_type_ids, attention_mask, re_spo)
 
         # print("acc",acc)
 
@@ -324,191 +332,191 @@ class myModel(pl.LightningModule):
         self.log('train_loss', loss)
         return loss
 
-    def validation_step(self, batch, batch_idx):
-        # training_step defined the train loop.
-        # It is independent of forward
-        # print(len(batch))
-        input_ids, token_type_ids, attention_mask, tag, tagtype = batch
-
-        input_ids, token_type_ids, attention_mask, tag, tagtype = input_ids.view(-1,
-                                                                                 self.hparams.max_len), token_type_ids.view(
-            -1, self.hparams.max_len), attention_mask.view(-1, self.hparams.max_len), tag.view(-1,
-                                                                                               self.hparams.max_len), tagtype.view(
-            -1, self.hparams.max_len)
-
-        logits, outType, out_lm = self(input_ids, token_type_ids, attention_mask)
-
-        # print("acc",acc)
-
-        # 类型
-        # 计算类型是 采用attention_mask作为筛选计算active_loss
-
-        if torch.sum(attention_mask) > 0:
-
-            active_loss = attention_mask.view(-1) == 1
-        else:
-            active_loss = attention_mask.view(-1) >= -100
-
-        loss, loss_pos, loss_type, loss_lm = self.getLoss(
-            logits, outType=outType, tag=tag, tagtype=tagtype, attention_mask=attention_mask, out_lm=None, lm=None)
-
-        type_precision, type_recall = precision_recall(outType.argmax(dim=-1).view(-1)[active_loss],
-                                                       tagtype.reshape(-1).long()[
-                                                           active_loss], average='macro',
-                                                       num_classes=self.hparams.num_labels)
-
-        type_pred_f1 = f1(outType.argmax(dim=-1).view(-1)[active_loss], tagtype.reshape(-1).long()[active_loss],
-                          num_classes=self.hparams.num_labels, average='macro')
-
-        acc_type = accuracy(outType.argmax(-1).view(-1)[active_loss],
-                            tagtype.int().view(-1)[active_loss])
-        # 起始位置
-
-        # # # 计算出所有类型结果
-        # outType_index = outType.argmax(dim=-1)
-        # outType_active = torch.where(
-        #     outType_index > 0,
-        #     outType_index,
-        #     tagtype.long())
-        # if torch.sum(outType_active.view(-1))>0:
-        #     active_loss=outType_index.view(-1)>0
-        # else:
-        #     active_loss=active_loss
-
-        lastOut = logits.argmax(dim=-1)
-
-        precision, recall = precision_recall(lastOut.view(-1)[active_loss], tag.reshape(-1).long()[active_loss],
-                                             average='macro', num_classes=self.hparams.maxWordLen)
-
-        pred_f1 = f1(lastOut.view(-1)[active_loss], tag.reshape(-1).long()[active_loss],
-                     num_classes=self.hparams.maxWordLen, average='macro')
-        pos_acc = accuracy(logits.argmax(-1).view(-1)[active_loss],
-                           tag.int().view(-1)[active_loss])
-
-        # lastType=outType.argmax(dim=-1)
-
-        # logits.argmax(dim=-1)
-        # 保留类型预测不为0的结果进行
-        # last=torch.where(lastType==0,0,lastOut)
-
-        metrics = {
-            "val_f1_full": (pred_f1 + type_pred_f1) / 2,
-            "val_precision_macro": precision,
-            "val_recall_macro": recall,
-            # "val_"
-            "val_f1_macro": pred_f1,
-            "val_acc": pos_acc,
-            "val_acc_type": acc_type,
-            "val_type_precision_macro": type_precision,
-            "val_type_recall_macro": type_recall,
-            "val_type_f1_macro": type_pred_f1,
-            "val_loss_pos": loss_pos,
-            "val_loss_type": loss_type,
-            "val_loss": loss,
-        }
-        # print("metrics",metrics)
-        self.log_dict(metrics)
-        # self.log('train_loss', loss)
-        return metrics
-
-    def test_step(self, batch, batch_idx):
-        # training_step defined the train loop.
-        # It is independent of forward
-        input_ids, token_type_ids, attention_mask, tag, tagtype = batch
-
-        input_ids, token_type_ids, attention_mask, tag, tagtype = input_ids.view(-1,
-                                                                                 self.hparams.max_len), token_type_ids.view(
-            -1, self.hparams.max_len), attention_mask.view(-1, self.hparams.max_len), tag.view(-1,
-                                                                                               self.hparams.max_len), tagtype.view(
-            -1, self.hparams.max_len)
-
-        logits, outType, out_lm = self(input_ids, token_type_ids, attention_mask)
-
-        loss, loss_pos, loss_type, loss_lm = self.getLoss(
-            logits, outType=outType, tag=tag, tagtype=tagtype, attention_mask=attention_mask, out_lm=None, lm=None)
-
-        active_loss = attention_mask.view(-1) > -100
-        testf = open("data/test_pos_base_new_test.txt", "a+")
-
-        with open("data/test_pos_base_new.txt", "a+") as f:
-            for i, (x, out_pos, y_pos, out_type, y_type, masks) in enumerate(zip(input_ids.tolist(),
-                                                                                 logits.argmax(
-                                                                                     dim=-1).tolist(),
-                                                                                 tag.tolist(),
-                                                                                 outType.argmax(
-                                                                                     dim=-1).tolist(),
-                                                                                 tagtype.tolist(),
-                                                                                 attention_mask.tolist(),
-                                                                                 )):
-                #             print(p,y)
-                words = self.tokenizer.convert_ids_to_tokens(x)
-                #                 print(words)
-                word_dict = {}
-                word_y_dict = {}
-                f.write("\n\n\n")
-                f.write("######" * 20)
-                f.write("".join(words))
-                f.write("\n预测位置")
-                f.write(str(out_pos) + "\n实际标注位置" + str(y_pos))
-                f.write("\n")
-                for ii, (pit, yit, tx, ty, mask) in enumerate(zip(out_pos, y_pos, out_type, y_type, masks)):
-                    #                     if pit!=0 and  yit!=0 and mask!=0:
-                    if mask != 0:
-                        testf.write(words[ii] + "," + str(int(yit)) + "," + str(int(ty)) +
-                                    "\n")
-                    if yit != 0:
-                        word_y_dict[ii] = words[ii:ii + int(yit)]
-                    if mask != 0 and (pit != 0 or yit != 0):
-                        f.write("\n" * 3)
-                        f.write("******New*******")
-                        if int(pit) == int(yit):
-                            f.write("\n")
-                            f.write("预测成功###########")
-                        f.write("\n")
-
-                        f.write("类型yu-or):" + str(tx) + "=>" + str(ty))
-                        f.write("\n")
-                        f.write("预测:")
-                        f.write("---")
-
-                        word_dict[ii] = words[ii:ii + int(pit)]
-
-                        f.write(" ".join(words[ii:ii + int(pit)]))
-                        f.write("---")
-                        f.write("\n")
-
-                        f.write("标记:")
-                        #                         f.write(self.hparams.labels[int(ty)])
-                        # f.write()
-                        f.write("--")
-                        f.write(" ".join(words[ii:ii + int(yit)]))
-                # f.write("####"*10)
-                # f.write("\n"*5)
-
-        metrics = {"test_loss": loss}
-        self.log_dict(metrics)
-        return metrics
+    # def validation_step(self, batch, batch_idx):
+    #     # training_step defined the train loop.
+    #     # It is independent of forward
+    #     # print(len(batch))
+    #     input_ids, token_type_ids, attention_mask, tag, tagtype = batch
+    #
+    #     input_ids, token_type_ids, attention_mask, tag, tagtype = input_ids.view(-1,
+    #                                                                              self.hparams.max_len), token_type_ids.view(
+    #         -1, self.hparams.max_len), attention_mask.view(-1, self.hparams.max_len), tag.view(-1,
+    #                                                                                            self.hparams.max_len), tagtype.view(
+    #         -1, self.hparams.max_len)
+    #
+    #     logits, outType, out_lm = self(input_ids, token_type_ids, attention_mask)
+    #
+    #     # print("acc",acc)
+    #
+    #     # 类型
+    #     # 计算类型是 采用attention_mask作为筛选计算active_loss
+    #
+    #     if torch.sum(attention_mask) > 0:
+    #
+    #         active_loss = attention_mask.view(-1) == 1
+    #     else:
+    #         active_loss = attention_mask.view(-1) >= -100
+    #
+    #     loss, loss_pos, loss_type, loss_lm = self.getLoss(
+    #         logits, outType=outType, tag=tag, tagtype=tagtype, attention_mask=attention_mask, out_lm=None, lm=None)
+    #
+    #     type_precision, type_recall = precision_recall(outType.argmax(dim=-1).view(-1)[active_loss],
+    #                                                    tagtype.reshape(-1).long()[
+    #                                                        active_loss], average='macro',
+    #                                                    num_classes=self.hparams.num_labels)
+    #
+    #     type_pred_f1 = f1(outType.argmax(dim=-1).view(-1)[active_loss], tagtype.reshape(-1).long()[active_loss],
+    #                       num_classes=self.hparams.num_labels, average='macro')
+    #
+    #     acc_type = accuracy(outType.argmax(-1).view(-1)[active_loss],
+    #                         tagtype.int().view(-1)[active_loss])
+    #     # 起始位置
+    #
+    #     # # # 计算出所有类型结果
+    #     # outType_index = outType.argmax(dim=-1)
+    #     # outType_active = torch.where(
+    #     #     outType_index > 0,
+    #     #     outType_index,
+    #     #     tagtype.long())
+    #     # if torch.sum(outType_active.view(-1))>0:
+    #     #     active_loss=outType_index.view(-1)>0
+    #     # else:
+    #     #     active_loss=active_loss
+    #
+    #     lastOut = logits.argmax(dim=-1)
+    #
+    #     precision, recall = precision_recall(lastOut.view(-1)[active_loss], tag.reshape(-1).long()[active_loss],
+    #                                          average='macro', num_classes=self.hparams.maxWordLen)
+    #
+    #     pred_f1 = f1(lastOut.view(-1)[active_loss], tag.reshape(-1).long()[active_loss],
+    #                  num_classes=self.hparams.maxWordLen, average='macro')
+    #     pos_acc = accuracy(logits.argmax(-1).view(-1)[active_loss],
+    #                        tag.int().view(-1)[active_loss])
+    #
+    #     # lastType=outType.argmax(dim=-1)
+    #
+    #     # logits.argmax(dim=-1)
+    #     # 保留类型预测不为0的结果进行
+    #     # last=torch.where(lastType==0,0,lastOut)
+    #
+    #     metrics = {
+    #         "val_f1_full": (pred_f1 + type_pred_f1) / 2,
+    #         "val_precision_macro": precision,
+    #         "val_recall_macro": recall,
+    #         # "val_"
+    #         "val_f1_macro": pred_f1,
+    #         "val_acc": pos_acc,
+    #         "val_acc_type": acc_type,
+    #         "val_type_precision_macro": type_precision,
+    #         "val_type_recall_macro": type_recall,
+    #         "val_type_f1_macro": type_pred_f1,
+    #         "val_loss_pos": loss_pos,
+    #         "val_loss_type": loss_type,
+    #         "val_loss": loss,
+    #     }
+    #     # print("metrics",metrics)
+    #     self.log_dict(metrics)
+    #     # self.log('train_loss', loss)
+    #     return metrics
+    #
+    # def test_step(self, batch, batch_idx):
+    #     # training_step defined the train loop.
+    #     # It is independent of forward
+    #     input_ids, token_type_ids, attention_mask, tag, tagtype = batch
+    #
+    #     input_ids, token_type_ids, attention_mask, tag, tagtype = input_ids.view(-1,
+    #                                                                              self.hparams.max_len), token_type_ids.view(
+    #         -1, self.hparams.max_len), attention_mask.view(-1, self.hparams.max_len), tag.view(-1,
+    #                                                                                            self.hparams.max_len), tagtype.view(
+    #         -1, self.hparams.max_len)
+    #
+    #     logits, outType, out_lm = self(input_ids, token_type_ids, attention_mask)
+    #
+    #     loss, loss_pos, loss_type, loss_lm = self.getLoss(
+    #         logits, outType=outType, tag=tag, tagtype=tagtype, attention_mask=attention_mask, out_lm=None, lm=None)
+    #
+    #     active_loss = attention_mask.view(-1) > -100
+    #     testf = open("data/test_pos_base_new_test.txt", "a+")
+    #
+    #     with open("data/test_pos_base_new.txt", "a+") as f:
+    #         for i, (x, out_pos, y_pos, out_type, y_type, masks) in enumerate(zip(input_ids.tolist(),
+    #                                                                              logits.argmax(
+    #                                                                                  dim=-1).tolist(),
+    #                                                                              tag.tolist(),
+    #                                                                              outType.argmax(
+    #                                                                                  dim=-1).tolist(),
+    #                                                                              tagtype.tolist(),
+    #                                                                              attention_mask.tolist(),
+    #                                                                              )):
+    #             #             print(p,y)
+    #             words = self.tokenizer.convert_ids_to_tokens(x)
+    #             #                 print(words)
+    #             word_dict = {}
+    #             word_y_dict = {}
+    #             f.write("\n\n\n")
+    #             f.write("######" * 20)
+    #             f.write("".join(words))
+    #             f.write("\n预测位置")
+    #             f.write(str(out_pos) + "\n实际标注位置" + str(y_pos))
+    #             f.write("\n")
+    #             for ii, (pit, yit, tx, ty, mask) in enumerate(zip(out_pos, y_pos, out_type, y_type, masks)):
+    #                 #                     if pit!=0 and  yit!=0 and mask!=0:
+    #                 if mask != 0:
+    #                     testf.write(words[ii] + "," + str(int(yit)) + "," + str(int(ty)) +
+    #                                 "\n")
+    #                 if yit != 0:
+    #                     word_y_dict[ii] = words[ii:ii + int(yit)]
+    #                 if mask != 0 and (pit != 0 or yit != 0):
+    #                     f.write("\n" * 3)
+    #                     f.write("******New*******")
+    #                     if int(pit) == int(yit):
+    #                         f.write("\n")
+    #                         f.write("预测成功###########")
+    #                     f.write("\n")
+    #
+    #                     f.write("类型yu-or):" + str(tx) + "=>" + str(ty))
+    #                     f.write("\n")
+    #                     f.write("预测:")
+    #                     f.write("---")
+    #
+    #                     word_dict[ii] = words[ii:ii + int(pit)]
+    #
+    #                     f.write(" ".join(words[ii:ii + int(pit)]))
+    #                     f.write("---")
+    #                     f.write("\n")
+    #
+    #                     f.write("标记:")
+    #                     #                         f.write(self.hparams.labels[int(ty)])
+    #                     # f.write()
+    #                     f.write("--")
+    #                     f.write(" ".join(words[ii:ii + int(yit)]))
+    #             # f.write("####"*10)
+    #             # f.write("\n"*5)
+    #
+    #     metrics = {"test_loss": loss}
+    #     self.log_dict(metrics)
+    #     return metrics
 
     def predict_step(self, batch: Any, batch_idx: int, dataloader_idx: Optional[int] = None) -> Any:
         # training_step defined the train loop.
         # It is independent of forward
         input_ids, token_type_ids, attention_mask = batch
 
-        input_ids, token_type_ids, attention_mask = input_ids.view(-1,self.hparams.max_len), token_type_ids.view(
+        input_ids, token_type_ids, attention_mask = input_ids.view(-1, self.hparams.max_len), token_type_ids.view(
             -1, self.hparams.max_len), attention_mask.view(-1, self.hparams.max_len)
 
         logits, outType, _ = self(input_ids, token_type_ids, attention_mask)
         # active_loss = attention_mask.view(-1) > -100
         # testf = open("data/test_pos_base_new_testpredict_step.txt", "a+")
-        outdata=[]
+        outdata = []
         with open("data/test_pos_base_predict_step.txt", "a+") as f:
             for i, (x, out_pos, out_type, masks) in enumerate(zip(input_ids.tolist(),
-                                                                                 logits.argmax(
-                                                                                     dim=-1).tolist(),
-                                                                                 outType.argmax(
-                                                                                     dim=-1).tolist(),
-                                                                                 attention_mask.tolist(),
-                                                                                 )):
+                                                                  logits.argmax(
+                                                                      dim=-1).tolist(),
+                                                                  outType.argmax(
+                                                                      dim=-1).tolist(),
+                                                                  attention_mask.tolist(),
+                                                                  )):
                 #             print(p,y)
                 words = self.tokenizer.convert_ids_to_tokens(x)
                 #                 print(words)
@@ -520,11 +528,11 @@ class myModel(pl.LightningModule):
                     # if mask != 0:
                     #     testf.write(words[ii] + "," + str(int(yit)) + "," + str(int(ty)) +
                     #                 "\n")
-                    if pit != 0 and mask!=0 and tx!=0:
+                    if pit != 0 and mask != 0 and tx != 0:
                         word_y_dict[ii] = words[ii:ii + int(pit)]
-                        word_y_dict[ii]=tx
+                        word_y_dict[ii] = tx
 
-                outdata.append({"words":words,"word_dict":word_dict,"word_y_dict":word_y_dict})
+                outdata.append({"words": words, "word_dict": word_dict, "word_y_dict": word_y_dict})
         return outdata
 
     def train_dataloader(self):
