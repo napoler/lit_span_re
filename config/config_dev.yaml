@@ -67,7 +67,7 @@ model:
   hidden_size: 256
   vocab_size: 21128
   ignore_index: 0
-  max_len: 256
+  max_len: 128
   maxWordLen: 64
   num_labels: 100
   optimizer_name: AdamW

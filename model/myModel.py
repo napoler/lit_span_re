@@ -170,43 +170,45 @@ class myModel(pl.LightningModule):
         # print(s, e, labels)
         loss = None
         for it_s, it_e, it_l in zip(s.split(1, dim=1), e.split(1, dim=1), labels.split(1, dim=1)):
-            print(it_s,it_e,it_l)
-            print(it_s.sum(0))
+            # print(it_s,it_e,it_l)
+            # print(it_s.sum(0))
             if torch.sum(it_s,dim=0) == 0:
                 continue
 
             it_s_index = one_hot(it_s.view(-1).long(), num_classes=L)
             # print(new)
+            try:
+                mask = it_s_index == 1
+                # 筛选出表示结果
+                # print(x_last_hidden_state[mask])
+                it_s_hidden_state = x_last_hidden_state[mask]
+                # print(it_s_hidden_state.size())
 
-            mask = it_s_index == 1
-            # 筛选出表示结果
-            # print(x_last_hidden_state[mask])
-            it_s_hidden_state = x_last_hidden_state[mask]
-            # print(it_s_hidden_state.size())
+                it_e_index = one_hot(it_e.view(-1).long(), num_classes=L)
+                # print(new)
+                mask = it_e_index == 1
+                # 筛选出表示结果
+                # print(x_last_hidden_state[mask])
+                it_e_hidden_state = x_last_hidden_state[mask]
+                # print(it_e_hidden_state.size())
 
-            it_e_index = one_hot(it_e.view(-1).long(), num_classes=L)
-            # print(new)
-            mask = it_e_index == 1
-            # 筛选出表示结果
-            # print(x_last_hidden_state[mask])
-            it_e_hidden_state = x_last_hidden_state[mask]
-            # print(it_e_hidden_state.size())
-
-            # s_e=torch.cat((it_s_hidden_state,it_e_hidden_state),-1).view(B,2,-1)
-            # print(s_e.size())
-            emb_diff = it_s_hidden_state - it_s_hidden_state
-            sim_c = torch.cat((it_s_hidden_state, it_s_hidden_state, emb_diff.abs()), -1)
-            # print("sim_c",sim_c.size())
-            pooler = self.pre_classifier(sim_c)
-            # print("pooler", pooler)
-            # print(it_l.view(-1))
-            loss1 = self.loss_fc(pooler, it_l.view(-1).long())
-            # print("loss1",loss1)
-            if loss == None:
-                loss = loss1
-            else:
-                loss = loss + loss1
-
+                # s_e=torch.cat((it_s_hidden_state,it_e_hidden_state),-1).view(B,2,-1)
+                # print(s_e.size())
+                emb_diff = it_s_hidden_state - it_s_hidden_state
+                sim_c = torch.cat((it_s_hidden_state, it_s_hidden_state, emb_diff.abs()), -1)
+                # print("sim_c",sim_c.size())
+                pooler = self.pre_classifier(sim_c)
+                # print("pooler", pooler)
+                # print(it_l.view(-1))
+                loss1 = self.loss_fc(pooler, it_l.view(-1).long())
+                # print("loss1",loss1)
+                if loss == None:
+                    loss = loss1
+                else:
+                    loss = loss + loss1
+            except Exception as e:
+                print("e",e)
+                pass
             # print(pooler.argmax(dim=-1))
             # print(it_l)
 

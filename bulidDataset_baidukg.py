@@ -192,7 +192,7 @@ def save(datajson, save_filename="train.pkt", save_labels=False, fakeNum=1, maxL
                                 endPos = endPos + rand_num
                                 starPos = starPos + rand_num
 
-                                if starPos > maxLen or endPos > maxLen:
+                                if starPos > maxLen-5 or endPos > maxLen-5:
                                     continue
                                 # wordStartIndex[one['id']] = starPos
                                 # writer_test.writerow(["".join(WordList[s_start:s_start+wordLen])])
@@ -241,7 +241,7 @@ def save(datajson, save_filename="train.pkt", save_labels=False, fakeNum=1, maxL
                                 endPos = endPos + rand_num
                                 starPos = starPos + rand_num
 
-                                if starPos >maxLen or endPos >maxLen:
+                                if starPos >maxLen-5 or endPos >maxLen-5:
                                     continue
                                 spo[key] = endPos
                                 spo["predicate"] = relabels_list.index(one["predicate"])
