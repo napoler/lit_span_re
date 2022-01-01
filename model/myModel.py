@@ -160,7 +160,6 @@ class myModel(pl.LightningModule):
         #     print(it.size())
         # print(torch.split(re_spo, 1, dim=-1))
 
-
         # 拆分数据，做逐个实体对分类，关系对分类
         s, e, labels = torch.split(re_spo, 1, dim=-1)[0], torch.split(re_spo, 1, dim=-1)[2], \
                        torch.split(re_spo, 1, dim=-1)[1]
@@ -171,8 +170,14 @@ class myModel(pl.LightningModule):
         # print(s, e, labels)
         loss = None
         for it_s, it_e, it_l in zip(s.split(1, dim=1), e.split(1, dim=1), labels.split(1, dim=1)):
+            print(it_s,it_e,it_l)
+            print(it_s.sum(0))
+            if torch.sum(it_s,dim=0) == 0:
+                continue
+
             it_s_index = one_hot(it_s.view(-1).long(), num_classes=L)
             # print(new)
+
             mask = it_s_index == 1
             # 筛选出表示结果
             # print(x_last_hidden_state[mask])
@@ -197,13 +202,15 @@ class myModel(pl.LightningModule):
             # print(it_l.view(-1))
             loss1 = self.loss_fc(pooler, it_l.view(-1).long())
             # print("loss1",loss1)
-            if loss==None:
-                loss=loss1
+            if loss == None:
+                loss = loss1
             else:
                 loss = loss + loss1
 
-        # 关系对分类，结束
+            # print(pooler.argmax(dim=-1))
+            # print(it_l)
 
+        # 关系对分类，结束
 
         out_pos = self.pos_optimization(x_last_hidden_state)
         # 计算类型

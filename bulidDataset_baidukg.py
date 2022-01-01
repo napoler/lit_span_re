@@ -185,12 +185,15 @@ def save(datajson, save_filename="train.pkt", save_labels=False, fakeNum=1, maxL
 
                                 starPos = it['text'].find(word)
                                 endPos = starPos + len(word)
+
                                 # print("text",it['text'])
                                 # print("starPos",word,starPos,endPos)
                                 # 加入偏移
                                 endPos = endPos + rand_num
                                 starPos = starPos + rand_num
 
+                                if starPos > maxLen or endPos > maxLen:
+                                    continue
                                 # wordStartIndex[one['id']] = starPos
                                 # writer_test.writerow(["".join(WordList[s_start:s_start+wordLen])])
                                 # print(WordList[s_start:s_end])
@@ -230,18 +233,23 @@ def save(datajson, save_filename="train.pkt", save_labels=False, fakeNum=1, maxL
 
                                 starPos = it['text'].find(word)
                                 endPos = starPos + len(word)
+
+
                                 # print("text",it['text'])
 
                                 # 加入偏移
                                 endPos = endPos + rand_num
                                 starPos = starPos + rand_num
 
+                                if starPos >maxLen or endPos >maxLen:
+                                    continue
                                 spo[key] = endPos
                                 spo["predicate"] = relabels_list.index(one["predicate"])
 
                         # print("spo", list(spo.values()))
                         try:
-                            reSpo[spo_i] = list(spo.values())
+                            if len(list(spo.values()))==3:
+                                reSpo[spo_i] = list(spo.values())
                         except:
                             pass
                 if good != True:
@@ -311,7 +319,7 @@ def save(datajson, save_filename="train.pkt", save_labels=False, fakeNum=1, maxL
 for fileName, datajson in readData(datapath):
     # print("datajson", datajson)
     # print("fileName", fileName)
-    datajson = datajson[:20]
+    datajson = datajson[:5000]
     save(datajson, save_filename=os.path.join(outPath, fileName + ".pkt"), save_labels=True,MaxRE=MaxRE,maxLen=128,model_len=128, fakeNum=5)
 
 if __name__ == '__main__':

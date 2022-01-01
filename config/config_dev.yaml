@@ -11,8 +11,8 @@ trainer:
   num_nodes: 1
   num_processes: 1
   devices: null
-  gpus: null
-  auto_select_gpus: false
+  gpus: [0]
+  auto_select_gpus: true
   tpu_cores: null
   ipus: null
   log_gpu_memory: null
@@ -68,15 +68,15 @@ model:
   vocab_size: 21128
   ignore_index: 0
   max_len: 256
-  maxWordLen: 65
+  maxWordLen: 64
   num_labels: 100
   optimizer_name: AdamW
   dropout: 0.2
   pretrained: uer/chinese_roberta_L-2_H-128
   use_rnn: false
   loss_alpha: 0.5
-  batch_size: 2
-  labels: 50
+  batch_size: 6
+  labels: 130
   trainfile: data/char_bert_ner/train_data.json.pkt
   valfile: data/char_bert_ner/dev_data.json.pkt
   testfile: data/char_bert_ner/dev_data.json.pkt
