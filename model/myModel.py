@@ -202,6 +202,8 @@ class myModel(pl.LightningModule):
             else:
                 loss = loss + loss1
 
+        # 关系对分类，结束
+
 
         out_pos = self.pos_optimization(x_last_hidden_state)
         # 计算类型
