@@ -140,11 +140,27 @@ class myModel(pl.LightningModule):
             x_last_hidden_state = self.fix(x_last_hidden_state)
 
         # re_spo
+        # print(re_spo.size())
         # for it in torch.split(re_spo, 1, dim=-1):
-        #     print(it)
+        #     print(it.size())
         # print(torch.split(re_spo, 1, dim=-1))
-        for s,e in zip(torch.split(re_spo, 1, dim=-1)[0],torch.split(re_spo, 1, dim=-1)[2] ):
-            print(s,e)
+        s,e,labels=torch.split(re_spo, 1, dim=-1)[0], torch.split(re_spo, 1, dim=-1)[2], torch.split(re_spo, 1, dim=-1)[1]
+        print(s.size(), e.size(),labels.size())
+        print(s, e, labels)
+
+
+
+
+
+
+
+
+        # for s,e in zip(torch.split(re_spo, 1, dim=-1)[0],torch.split(re_spo, 1, dim=1)[2] ):
+        #     print(s.size(),e.size())
+        #     # print(x_last_hidden_state[:,s:e,:])
+        #     x_last_hidden_state[:,s:e,:] = x_last_hidden_state[:,s:e,:] + x_last_hidden_state[:,s:e,:]
+        #     print(x_last_hidden_state[:,s:e,:])
+        #     # print(s.,e)
         out_pos = self.pos_optimization(x_last_hidden_state)
         # 计算类型
 
