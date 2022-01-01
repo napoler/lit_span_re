@@ -23,6 +23,8 @@ from torch import nn
 from torch.utils.data import DataLoader
 from torchmetrics.functional import accuracy, f1, precision_recall
 from transformers import AutoConfig, AutoModel, BertTokenizer
+from einops import rearrange, reduce, repeat
+from torch.nn.functional import one_hot
 
 
 # from tkitAutoTokenizerPosition import AutoTokenizerPosition, autoBIO, autoSpan
@@ -44,6 +46,7 @@ class myModel(pl.LightningModule):
             pretrained="uer/chinese_roberta_L-2_H-128",
             use_rnn=False,
             loss_alpha=0.5,
+            labels=50,
             batch_size=2, trainfile="./data/train.pkt", valfile="./data/val.pkt", testfile="./data/test.pkt", **kwargs):
         super().__init__()
         self.save_hyperparameters()
@@ -110,6 +113,17 @@ class myModel(pl.LightningModule):
             nn.Dropout(self.hparams.dropout),
             nn.Linear(512, self.hparams.maxWordLen)
         )
+
+        # 定义孪生网络分类器
+
+        self.pre_classifier = nn.Sequential(
+            nn.Linear(config.hidden_size * 3, 512),
+            nn.Dropout(self.hparams.dropout),
+            nn.LeakyReLU(),
+            nn.Linear(512, self.hparams.labels)
+        )
+        self.loss_fc = nn.CrossEntropyLoss()
+
         # self.q = []
         # Bounded region of parameter space
         # pbounds = {'x': (1e-8, 0.99)}
@@ -139,28 +153,54 @@ class myModel(pl.LightningModule):
             x_last_hidden_state, _ = self.rnn(x_last_hidden_state)
             x_last_hidden_state = self.fix(x_last_hidden_state)
 
+        # print(x_last_hidden_state)
         # re_spo
         # print(re_spo.size())
         # for it in torch.split(re_spo, 1, dim=-1):
         #     print(it.size())
         # print(torch.split(re_spo, 1, dim=-1))
-        s,e,labels=torch.split(re_spo, 1, dim=-1)[0], torch.split(re_spo, 1, dim=-1)[2], torch.split(re_spo, 1, dim=-1)[1]
-        print(s.size(), e.size(),labels.size())
-        print(s, e, labels)
+
+        s, e, labels = torch.split(re_spo, 1, dim=-1)[0], torch.split(re_spo, 1, dim=-1)[2], \
+                       torch.split(re_spo, 1, dim=-1)[1]
+        # print(s.size(), e.size(), labels.size())
+        # print(s)
+        s = rearrange(s, 'b c 1 -> b c')
+        # print(s.size(), e.size(), labels.size())
+        # print(s, e, labels)
+        loss = None
+        for it_s, it_e, it_l in zip(s.split(1, dim=1), e.split(1, dim=1), labels.split(1, dim=1)):
+            it_s_index = one_hot(it_s.view(-1).long(), num_classes=L)
+            # print(new)
+            mask = it_s_index == 1
+            # 筛选出表示结果
+            # print(x_last_hidden_state[mask])
+            it_s_hidden_state = x_last_hidden_state[mask]
+            # print(it_s_hidden_state.size())
+
+            it_e_index = one_hot(it_e.view(-1).long(), num_classes=L)
+            # print(new)
+            mask = it_e_index == 1
+            # 筛选出表示结果
+            # print(x_last_hidden_state[mask])
+            it_e_hidden_state = x_last_hidden_state[mask]
+            # print(it_e_hidden_state.size())
+
+            # s_e=torch.cat((it_s_hidden_state,it_e_hidden_state),-1).view(B,2,-1)
+            # print(s_e.size())
+            emb_diff = it_s_hidden_state - it_s_hidden_state
+            sim_c = torch.cat((it_s_hidden_state, it_s_hidden_state, emb_diff.abs()), -1)
+            # print("sim_c",sim_c.size())
+            pooler = self.pre_classifier(sim_c)
+            # print("pooler", pooler)
+            # print(it_l.view(-1))
+            loss1 = self.loss_fc(pooler, it_l.view(-1).long())
+            # print("loss1",loss1)
+            if loss==None:
+                loss=loss1
+            else:
+                loss = loss + loss1
 
 
-
-
-
-
-
-
-        # for s,e in zip(torch.split(re_spo, 1, dim=-1)[0],torch.split(re_spo, 1, dim=1)[2] ):
-        #     print(s.size(),e.size())
-        #     # print(x_last_hidden_state[:,s:e,:])
-        #     x_last_hidden_state[:,s:e,:] = x_last_hidden_state[:,s:e,:] + x_last_hidden_state[:,s:e,:]
-        #     print(x_last_hidden_state[:,s:e,:])
-        #     # print(s.,e)
         out_pos = self.pos_optimization(x_last_hidden_state)
         # 计算类型
 
@@ -168,7 +208,7 @@ class myModel(pl.LightningModule):
 
         out_lm = self.lmhead(x_last_hidden_state)
         # print("out_pos, out_type, out_lm", out_pos, out_type, out_lm)
-        return out_pos, out_type, out_lm
+        return out_pos, out_type, out_lm, loss
 
     def getLoss(self, out, outType, out_lm=None, tag=None, tagtype=None, lm=None, attention_mask=None):
         """
@@ -224,11 +264,11 @@ class myModel(pl.LightningModule):
             if loss_type > loss_pos:
 
                 loss = loss_type * self.hparams.loss_alpha + loss_lm * (
-                            1 - self.hparams.loss_alpha) * 1 / 100 + loss_pos * (
+                        1 - self.hparams.loss_alpha) * 1 / 100 + loss_pos * (
                                1 - self.hparams.loss_alpha) * 99 / 100
             else:
                 loss = loss_pos * self.hparams.loss_alpha + loss_lm * (
-                            1 - self.hparams.loss_alpha) * 1 / 100 + loss_type * (
+                        1 - self.hparams.loss_alpha) * 1 / 100 + loss_type * (
                                1 - self.hparams.loss_alpha) * 99 / 100
             # loss = loss_type + loss_lm + loss_pos
         else:
@@ -269,7 +309,7 @@ class myModel(pl.LightningModule):
         input_ids, labels, _ = mk.mask(input_ids.cpu())
         input_ids = torch.Tensor(input_ids).to(self.device).long()
         labels = torch.Tensor(labels).to(self.device).long()
-        logits, outType, out_lm = self(input_ids, token_type_ids, attention_mask, re_spo)
+        logits, outType, out_lm, loss_re = self(input_ids, token_type_ids, attention_mask, re_spo)
 
         # print("acc",acc)
 
@@ -285,6 +325,8 @@ class myModel(pl.LightningModule):
         loss, loss_pos, loss_type, loss_lm = self.getLoss(
             logits, outType=outType, tag=tag, tagtype=tagtype, out_lm=out_lm, lm=labels,
             attention_mask=attention_mask)
+
+        loss = loss_re + loss
 
         type_precision, type_recall = precision_recall(outType.argmax(dim=-1).view(-1)[active_loss],
                                                        tagtype.reshape(-1).long()[
@@ -342,6 +384,7 @@ class myModel(pl.LightningModule):
             "train_loss_type": loss_type,
             "train_loss_lm": loss_lm,
             "train_loss_full": (loss_pos + loss_type) / 2,
+            "train_loss_re": loss_re
         }
         # print("metrics",metrics)
         self.log_dict(metrics)

@@ -12,4 +12,5 @@
 > python trainer.py fit --config config/base_config.yaml
 > 
 
+> tensorboard --logdir lightning_logs
 

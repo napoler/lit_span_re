@@ -76,6 +76,7 @@ model:
   use_rnn: false
   loss_alpha: 0.5
   batch_size: 2
+  labels: 50
   trainfile: data/char_bert_ner/train_data.json.pkt
   valfile: data/char_bert_ner/dev_data.json.pkt
   testfile: data/char_bert_ner/dev_data.json.pkt
