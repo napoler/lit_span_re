@@ -150,7 +150,7 @@ class myModel(pl.LightningModule):
 
         x_last_hidden_state = x.last_hidden_state
 
-        if self.hparams.use_rnn == True:
+        if self.hparams.use_rnn is True:
             x_last_hidden_state, _ = self.rnn(x_last_hidden_state)
             x_last_hidden_state = self.fix(x_last_hidden_state)
 
