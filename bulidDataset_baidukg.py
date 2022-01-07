@@ -319,7 +319,7 @@ def save(datajson, save_filename="train.pkt", save_labels=False, fakeNum=1, maxL
 for fileName, datajson in readData(datapath):
     # print("datajson", datajson)
     # print("fileName", fileName)
-    datajson = datajson[:5000]
+    # datajson = datajson[:5000]
     save(datajson, save_filename=os.path.join(outPath, fileName + ".pkt"), save_labels=True,MaxRE=MaxRE,maxLen=128,model_len=128, fakeNum=5)
 
 if __name__ == '__main__':
