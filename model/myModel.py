@@ -25,6 +25,7 @@ from torchmetrics.functional import accuracy, f1, precision_recall
 from transformers import AutoConfig, AutoModel, BertTokenizer
 from einops import rearrange, reduce, repeat
 from torch.nn.functional import one_hot
+from torchmetrics.functional import accuracy, f1, precision_recall
 
 
 # from tkitAutoTokenizerPosition import AutoTokenizerPosition, autoBIO, autoSpan
@@ -159,58 +160,76 @@ class myModel(pl.LightningModule):
         # for it in torch.split(re_spo, 1, dim=-1):
         #     print(it.size())
         # print(torch.split(re_spo, 1, dim=-1))
-
+        # print(re_spo.size())
         # 拆分数据，做逐个实体对分类，关系对分类
         s, e, labels = torch.split(re_spo, 1, dim=-1)[0], torch.split(re_spo, 1, dim=-1)[2], \
                        torch.split(re_spo, 1, dim=-1)[1]
         # print(s.size(), e.size(), labels.size())
         # print(s)
-        s = rearrange(s, 'b c 1 -> b c')
-        # print(s.size(), e.size(), labels.size())
+        # s = rearrange(s, 'b c 1 -> b c')
+        # print("all", s, e, labels.size())
         # print(s, e, labels)
         loss = None
+        items = None
+        items_labels = None
         for it_s, it_e, it_l in zip(s.split(1, dim=1), e.split(1, dim=1), labels.split(1, dim=1)):
-            # print(it_s,it_e,it_l)
+            # print("it", it_s, it_e, it_l)
             # print(it_s.sum(0))
-            if torch.sum(it_s,dim=0) == 0:
+            if torch.sum(it_s, dim=0) == 0:
                 continue
 
-            it_s_index = one_hot(it_s.view(-1).long(), num_classes=L)
-            # print(new)
             try:
+                it_s_index = one_hot(it_s.view(-1).long(), num_classes=L)
+                # print(it_s_index)
+                # s开始位置
                 mask = it_s_index == 1
                 # 筛选出表示结果
                 # print(x_last_hidden_state[mask])
                 it_s_hidden_state = x_last_hidden_state[mask]
                 # print(it_s_hidden_state.size())
 
+                # e 开始位置
                 it_e_index = one_hot(it_e.view(-1).long(), num_classes=L)
                 # print(new)
                 mask = it_e_index == 1
                 # 筛选出表示结果
                 # print(x_last_hidden_state[mask])
                 it_e_hidden_state = x_last_hidden_state[mask]
-                # print(it_e_hidden_state.size())
+                # print("it_e_hidden_state",it_e_hidden_state.size())
 
                 # s_e=torch.cat((it_s_hidden_state,it_e_hidden_state),-1).view(B,2,-1)
                 # print(s_e.size())
-                emb_diff = it_s_hidden_state - it_s_hidden_state
-                sim_c = torch.cat((it_s_hidden_state, it_s_hidden_state, emb_diff.abs()), -1)
-                # print("sim_c",sim_c.size())
-                pooler = self.pre_classifier(sim_c)
-                # print("pooler", pooler)
-                # print(it_l.view(-1))
-                loss1 = self.loss_fc(pooler, it_l.view(-1).long())
-                # print("loss1",loss1)
-                if loss == None:
-                    loss = loss1
+
+                emb_diff = it_e_hidden_state - it_s_hidden_state
+
+                sim_c = torch.cat((it_e_hidden_state, it_s_hidden_state, emb_diff.abs()), -1)
+
+                if items is None:
+                    items = sim_c
+                    items_labels = it_l
                 else:
-                    loss = loss + loss1
+                    items = torch.cat((items, sim_c), 0)
+                    items_labels = torch.cat((items_labels, it_l), 0)
+                # print("items size:", items.size())
             except Exception as e:
-                print("e",e)
+                print("e", e)
                 pass
-            # print(pooler.argmax(dim=-1))
-            # print(it_l)
+        if items is not None:
+            # print("items", items.size())
+            pooler = self.pre_classifier(items)
+            # print("pooler", pooler)
+            # print(it_l.view(-1))
+            loss1 = self.loss_fc(pooler, items_labels.view(-1).long())
+
+            acc = accuracy(pooler.argmax(-1), items_labels.view(-1).long())
+            self.log("acc", acc)
+            # print("loss1",loss1)
+            if loss is None:
+                loss = loss1
+            else:
+                loss = loss + loss1
+                # print(pooler.argmax(dim=-1))
+                # print(it_l)
 
         # 关系对分类，结束
 
