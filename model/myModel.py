@@ -125,19 +125,7 @@ class myModel(pl.LightningModule):
         )
         self.loss_fc = nn.CrossEntropyLoss()
 
-        # self.q = []
-        # Bounded region of parameter space
-        # pbounds = {'x': (1e-8, 0.99)}
 
-        # self.bysoptimizer = BayesianOptimization(
-        #     f=self.loss_optimizer,
-        #     pbounds=pbounds,
-        #     random_state=1,
-        # )
-        # self.loss1=0
-        # self.loss2=0
-        # self.loss=0
-        # self.w=loss_alpha
         self.save_hyperparameters()
 
     def forward(self, input_ids, token_type_ids=None, attention_mask=None, re_spo=None):
@@ -214,6 +202,7 @@ class myModel(pl.LightningModule):
             except Exception as e:
                 print("e", e)
                 pass
+        #
         if items is not None:
             # print("items", items.size())
             pooler = self.pre_classifier(items)
