@@ -21,6 +21,7 @@ import random
 # import pandas as pd # data processing, CSV file I/O (e.g. pd.read_csv)
 # from tkitAutoTokenizerPosition import AutoTokenizerPosition, autoBIO, autoSpan, AutoPos
 from tkitDatasetEx.AutoClear import AutoClear
+from random import sample
 
 # from tkitDatasetEx.readData import  readCMeEE
 
@@ -53,7 +54,7 @@ new_tag, # 实体位置信息
 datapath = "data/dataset"
 outPath = "data/char_bert_ner"
 DEBUG = False  # 设置测试限制20条数据
-MaxRE=10
+MaxRE = 10
 try:
     os.mkdir(outPath)
 except:
@@ -165,7 +166,7 @@ def save(datajson, save_filename="train.pkt", save_labels=False, fakeNum=1, maxL
                 # 词性
                 tagtype = (len(WordList) + 1) * [0]
 
-                reSpo = MaxRE*int(maxLen/model_len) * [[0, 0, 0]]
+                reSpo = MaxRE * int(maxLen / model_len) * [[0, 0, 0]]
 
                 # 使用-100计算交叉商忽略
                 # rePo = np.full((maxLen, model_len), 0)
@@ -192,7 +193,7 @@ def save(datajson, save_filename="train.pkt", save_labels=False, fakeNum=1, maxL
                                 endPos = endPos + rand_num
                                 starPos = starPos + rand_num
 
-                                if starPos > maxLen-5 or endPos > maxLen-5:
+                                if starPos > maxLen - 5 or endPos > maxLen - 5:
                                     continue
                                 # wordStartIndex[one['id']] = starPos
                                 # writer_test.writerow(["".join(WordList[s_start:s_start+wordLen])])
@@ -224,31 +225,48 @@ def save(datajson, save_filename="train.pkt", save_labels=False, fakeNum=1, maxL
                     for spo_i, one in enumerate(it['spo_list']):
 
                         spo = {}
+                        pairs = []
+                        entiy_list = []
                         for key in one.keys():
                             if key in ["object", "subject"]:
                                 # print(key)
+                                pairs.append(one["subject"] + "__" + one["object"])
+                                entiy_list.extend([one["subject"], one["object"]])
 
-                                word = one[key]
-                                wtype = one[key + "_type"]
+                        for iiii in range(len(entiy_list) * len(entiy_list)):
+                            one_it = sample(entiy_list, 2)
 
-                                starPos = it['text'].find(word)
-                                endPos = starPos + len(word)
-
-
-                                # print("text",it['text'])
-
+                            if ("__".join(one_it) not in pairs) and (one_it[0] != one_it[1]):
+                                # print("one_it", one_it)
+                                pairs.append(one_it)
+                                starPos = it['text'].find(one_it[0])
+                                endPos = it['text'].find(one_it[1])
                                 # 加入偏移
                                 endPos = endPos + rand_num
                                 starPos = starPos + rand_num
 
-                                if starPos >maxLen-5 or endPos >maxLen-5:
+                                if starPos > maxLen - 5 or endPos > maxLen - 5:
                                     continue
-                                spo[key] = endPos
+                                spo["object"] = endPos
+                                spo["subject"] = starPos
+                                spo["predicate"] = relabels_list.index("O")
+                            # else:
+                            #     if one_it[0] != one_it[1]:
+                            #         print("one_it", one_it)
+
+
+                        for key in one.keys():
+                            if key in ["object", "subject"]:
+                                starPos = it['text'].find(one[key])
+                                starPos = starPos + rand_num
+                                if starPos > maxLen - 5:
+                                    continue
+                                spo[key] = starPos
                                 spo["predicate"] = relabels_list.index(one["predicate"])
 
                         # print("spo", list(spo.values()))
                         try:
-                            if len(list(spo.values()))==3:
+                            if len(list(spo.values())) == 3:
                                 reSpo[spo_i] = list(spo.values())
                         except:
                             pass
@@ -290,7 +308,7 @@ def save(datajson, save_filename="train.pkt", save_labels=False, fakeNum=1, maxL
     tagsTensor = torch.Tensor(datas["tags"])
     tagtypeTensor = torch.Tensor(datas["tagtype"])
 
-    print("spo",len(datas["reSpo"]))
+    print("spo", len(datas["reSpo"]))
     reSpoTensor = torch.Tensor(datas["reSpo"])
 
     # print(reSpoTensor.select(1, 0))
@@ -305,7 +323,7 @@ def save(datajson, save_filename="train.pkt", save_labels=False, fakeNum=1, maxL
                               textTensor["attention_mask"].view(-1, model_len),
                               tagsTensor.view(-1, model_len),
                               tagtypeTensor.view(-1, model_len),
-                              reSpoTensor.view(-1, MaxRE,3),
+                              reSpoTensor.view(-1, MaxRE, 3),
 
                               )
 
@@ -319,8 +337,9 @@ def save(datajson, save_filename="train.pkt", save_labels=False, fakeNum=1, maxL
 for fileName, datajson in readData(datapath):
     # print("datajson", datajson)
     # print("fileName", fileName)
-    # datajson = datajson[:5000]
-    save(datajson, save_filename=os.path.join(outPath, fileName + ".pkt"), save_labels=True,MaxRE=MaxRE,maxLen=128,model_len=128, fakeNum=5)
+    datajson = datajson[:5000]
+    save(datajson, save_filename=os.path.join(outPath, fileName + ".pkt"), save_labels=True, MaxRE=MaxRE, maxLen=128,
+         model_len=128, fakeNum=5)
 
 if __name__ == '__main__':
     pass
