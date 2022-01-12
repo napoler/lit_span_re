@@ -75,7 +75,7 @@ model:
   pretrained: uer/chinese_roberta_L-2_H-128
   use_rnn: false
   loss_alpha: 0.5
-  batch_size: 6
+  batch_size: 8
   labels: 130
   trainfile: data/char_bert_ner/train_data.json.pkt
   valfile: data/char_bert_ner/dev_data.json.pkt

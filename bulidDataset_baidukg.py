@@ -161,6 +161,8 @@ def save(datajson, save_filename="train.pkt", save_labels=False, fakeNum=1, maxL
                 # rand_num=0
                 WordList = list(or_text)
                 WordList = rand_num * ["ر"] + WordList
+                if len(WordList) > maxLen:
+                    continue
 
                 tag = (len(WordList) + 1) * [0]
                 # 词性
@@ -241,6 +243,9 @@ def save(datajson, save_filename="train.pkt", save_labels=False, fakeNum=1, maxL
                                 pairs.append(one_it)
                                 starPos = it['text'].find(one_it[0])
                                 endPos = it['text'].find(one_it[1])
+                                if starPos <0 or endPos<0:
+
+                                    continue
                                 # 加入偏移
                                 endPos = endPos + rand_num
                                 starPos = starPos + rand_num
@@ -254,10 +259,11 @@ def save(datajson, save_filename="train.pkt", save_labels=False, fakeNum=1, maxL
                             #     if one_it[0] != one_it[1]:
                             #         print("one_it", one_it)
 
-
                         for key in one.keys():
                             if key in ["object", "subject"]:
                                 starPos = it['text'].find(one[key])
+                                if starPos < 0 :
+                                    continue
                                 starPos = starPos + rand_num
                                 if starPos > maxLen - 5:
                                     continue

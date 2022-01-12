@@ -157,7 +157,7 @@ class myModel(pl.LightningModule):
         # s = rearrange(s, 'b c 1 -> b c')
         # print("all", s, e, labels.size())
         # print(s, e, labels)
-        loss = None
+        loss = 0
         items = None
         items_labels = None
         for it_s, it_e, it_l in zip(s.split(1, dim=1), e.split(1, dim=1), labels.split(1, dim=1)):
@@ -208,10 +208,13 @@ class myModel(pl.LightningModule):
             pooler = self.pre_classifier(items)
             # print("pooler", pooler)
             # print(it_l.view(-1))
+            # print("items_labels",items_labels)
             loss1 = self.loss_fc(pooler, items_labels.view(-1).long())
-
-            acc = accuracy(pooler.argmax(-1), items_labels.view(-1).long())
-            self.log("acc", acc)
+            try:
+                acc = accuracy(pooler.argmax(-1), items_labels.view(-1).long())
+                self.log("acc", acc)
+            except:
+                pass
             # print("loss1",loss1)
             if loss is None:
                 loss = loss1
@@ -221,7 +224,7 @@ class myModel(pl.LightningModule):
                 # print(it_l)
 
         # 关系对分类，结束
-
+        # print("x_last_hidden_state",x_last_hidden_state)
         out_pos = self.pos_optimization(x_last_hidden_state)
         # 计算类型
 
