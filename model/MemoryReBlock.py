@@ -96,12 +96,13 @@ class MemoryReBlock(pl.LightningModule):
         self.model = AutoModel.from_pretrained(pretrained, config=config)
 
         # 定义孪生网络分类器
+        self.fix = nn.Linear(config.hidden_size * 3, config.hidden_size)
 
         self.pre_classifier = nn.Sequential(
-            nn.Linear(config.hidden_size * 6, 512),
+            # nn.Linear(config.hidden_size * 6, 512),
             nn.Dropout(self.hparams.dropout),
             nn.LeakyReLU(),
-            nn.Linear(512, self.hparams.labels)
+            nn.Linear(config.hidden_size, self.hparams.labels)
         )
 
         # memory tokens (like [cls]) from Memory Transformers paper
@@ -110,9 +111,8 @@ class MemoryReBlock(pl.LightningModule):
         if num_memory_tokens > 0:
             self.memory_tokens = nn.Parameter(torch.randn(num_memory_tokens, config.hidden_size))
 
-        # self.dropout = torch.nn.Dropout(dropout)
-        # self.classifier = torch.nn.Linear(config.hidden_size, 1)
-        # self.classifierSigmoid = torch.nn.Sigmoid()
+        print("self.memory_tokens ", self.memory_tokens.size())
+
         self.loss_fc = nn.CrossEntropyLoss()
 
         self.save_hyperparameters()
@@ -130,21 +130,20 @@ class MemoryReBlock(pl.LightningModule):
         emb_b = mean_pooling(b.last_hidden_state, attention_mask)
         emb_diff = emb_a - emb_b
         emb = torch.cat((emb_a, emb_b, emb_diff.abs()), -1)
+        emb = self.fix(emb)
 
-        b = emb.shape
+        b, n = *emb_a.shape,
+        # print("self.num_memory_tokens",self.memory_tokens.size())
+        # print("b",b)
         num_mem = self.num_memory_tokens
         if num_mem > 0:
             mem = repeat(self.memory_tokens, 'n d -> b n d', b=b)
-            emb = torch.cat((mem, emb), dim=1)
+            # print("mem",mem.size())
+            emb = torch.cat((mem, emb.unsqueeze(1)), dim=1)
+            # print("emb", emb.size())
 
-        pooler = self.pre_classifier(emb)[:1]
+        pooler = self.pre_classifier(emb)[:,:1]
 
-        # mem, x = x[:, :num_mem], x[:, num_mem:]
-
-        # pooler = torch.nn.ReLU()(pooler)
-        # pooler = self.dropout(pooler)
-        # output = self.classifier(pooler)
-        # output = self.classifierSigmoid(output)
         return pooler
 
     def getLoss(self, out, outType, out_lm=None, tag=None, tagtype=None, lm=None, attention_mask=None):
@@ -603,7 +602,23 @@ class MemoryReBlock(pl.LightningModule):
 
 
 if __name__ == '__main__':
-    src = torch.randint(0, 256, (1, 1024))
-    print(src.shape)
+    from transformers import BertTokenizer, BertModel
+
+    tokenizer = BertTokenizer.from_pretrained('uer/chinese_roberta_L-2_H-128')
+    inputs = tokenizer("Hello, my dog is cute", return_tensors="pt", max_length=128, pad_token="max_length")
+    inputsB = tokenizer("Hello, my dog is cute", return_tensors="pt", max_length=128, pad_token="max_length")
+    # src = torch.randint(0, 256, (4, 128))
+    print(inputs)
+    # print(src.shape)
+    model = MemoryReBlock()
+    # print(model)
+
+    input_ids = inputs['input_ids']
+    attention_mask = inputs['attention_mask']
+    input_ids_b = inputsB['input_ids']
+    attention_mask_b = inputsB['attention_mask']
+    out = model(input_ids, attention_mask, input_ids_b, attention_mask_b)
+    print(out.size())
+    # print(model)
 
     pass
