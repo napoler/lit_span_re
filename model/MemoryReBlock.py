@@ -99,19 +99,30 @@ class MemoryReBlock(pl.LightningModule):
         self.fix = nn.Linear(config.hidden_size * 3, config.hidden_size)
 
         self.pre_classifier = nn.Sequential(
-            # nn.Linear(config.hidden_size * 6, 512),
+            nn.Linear(config.hidden_size, config.hidden_size),
+            nn.Dropout(self.hparams.dropout),
+            nn.LeakyReLU(),
+            nn.Linear(config.hidden_size, config.hidden_size),
+            nn.Dropout(self.hparams.dropout),
+            nn.LeakyReLU(),
+            nn.Linear(config.hidden_size, config.hidden_size),
+            nn.Dropout(self.hparams.dropout),
+            nn.LeakyReLU(),
+            nn.Linear(config.hidden_size ,config.hidden_size),
             nn.Dropout(self.hparams.dropout),
             nn.LeakyReLU(),
             nn.Linear(config.hidden_size, self.hparams.labels)
         )
 
         # memory tokens (like [cls]) from Memory Transformers paper
+        # https://github.com/lucidrains/x-transformers/blob/b0c0ec9fad5eecdb8ed9b3c6e62547b6f06acd8d/x_transformers/x_transformers.py#L1006
+
         num_memory_tokens = default(num_memory_tokens, 0)
         self.num_memory_tokens = num_memory_tokens
         if num_memory_tokens > 0:
             self.memory_tokens = nn.Parameter(torch.randn(num_memory_tokens, config.hidden_size))
 
-        print("self.memory_tokens ", self.memory_tokens.size())
+        # print("self.memory_tokens ", self.memory_tokens.size())
 
         self.loss_fc = nn.CrossEntropyLoss()
 
@@ -142,7 +153,7 @@ class MemoryReBlock(pl.LightningModule):
             emb = torch.cat((mem, emb.unsqueeze(1)), dim=1)
             # print("emb", emb.size())
 
-        pooler = self.pre_classifier(emb)[:,:1]
+        pooler = self.pre_classifier(emb)[:, :1]
 
         return pooler
 
