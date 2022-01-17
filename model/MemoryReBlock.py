@@ -152,7 +152,7 @@ class MemoryReBlock(pl.LightningModule):
             # print("mem",mem.size())
             emb = torch.cat((mem, emb.unsqueeze(1)), dim=1)
             # print("emb", emb.size())
-
+        # mem, x = x[:, :num_mem], x[:, num_mem:]
         pooler = self.pre_classifier(emb)[:, :1]
 
         return pooler
