@@ -3,6 +3,8 @@
 作者：　terrychan
 Blog: https://terrychan.org
 # 说明：
+基于记忆的关系模型
+
 
 """
 import csv

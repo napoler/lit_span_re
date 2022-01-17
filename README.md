@@ -10,6 +10,18 @@
 使用孪生网络进行分类任务，做分类任务来训练关系抽取模型。
 
 
+# 方案2 基于记忆的关系模型
+当前模型可以基于三元组数据做预训练，主体设计借鉴sentent bert的孪生网络结构。
+使用均值池化方案做。
+
+https://github.com/lucidrains/x-transformers#augmenting-self-attention-with-persistent-memory
+
+
+
+
+
+
+
 
 快速开发Pytorch的简单例子。
 包含了一个简单的神经网络，一个简单的训练和预测程序。
