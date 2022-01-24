@@ -28,9 +28,6 @@ from torch.nn.functional import one_hot
 from torchmetrics.functional import accuracy, f1, precision_recall
 
 
-# from tkitAutoTokenizerPosition import AutoTokenizerPosition, autoBIO, autoSpan
-
-
 class myModel(pl.LightningModule):
     """
     基础的命名实体
