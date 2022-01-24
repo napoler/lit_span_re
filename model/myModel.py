@@ -161,6 +161,7 @@ class myModel(pl.LightningModule):
         items = None
         items_labels = None
         for it_s, it_e, it_l in zip(s.split(1, dim=1), e.split(1, dim=1), labels.split(1, dim=1)):
+            # 自动筛选出匹配的表示
             # print("it", it_s, it_e, it_l)
             # print(it_s.sum(0))
             if torch.sum(it_s, dim=0) == 0:
